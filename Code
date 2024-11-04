@@ -1,0 +1,139 @@
+pol_obs<-read.csv("Daphne_observed_pollination.csv")
+pol_pot<-read.csv("Daphne_potential_pollination.csv")
+pol_obs<-cbind(pol_obs[,c(1,2)],interaction = 'pollination')
+pol_pot<-cbind(pol_pot,interaction = 'pollination')
+
+disp_obs<-read.csv("Daphne_observed_dispersal.csv")
+disp_pot<-read.csv("Daphne_potential_dispersal.csv")
+disp_obs<-cbind(disp_obs[,c(1,2)],interaction = 'dispersal')
+disp_pot<-cbind(disp_pot,interaction = 'dispersal')
+
+
+herb_obs<-read.csv("Daphne_observed_herbivory.csv")
+herb_pot<-read.csv("Daphne_potential_herbivory.csv")
+herb_obs<-cbind(herb_obs[,c(1,2)],interaction = 'herbivory')
+herb_pot<-cbind(herb_pot,interaction = 'herbivory')
+
+
+complete_obs_network<-unique(rbind(pol_obs,disp_obs,herb_obs))
+complete_pot_network<-unique(rbind(pol_pot,disp_pot,herb_pot,complete_obs_network))
+
+
+pol_pot<-complete_pot_network[complete_pot_network$interaction=='pollination',]
+disp_pot<-complete_pot_network[complete_pot_network$interaction=='dispersal',]
+herb_pot<-complete_pot_network[complete_pot_network$interaction=='herbivory',]
+
+null_nets<-list()
+for (i in 1:100){
+  pol_rand<-pol_pot[sample(1:nrow(pol_pot),nrow(pol_obs)),]
+  disp_rand<-disp_pot[sample(1:nrow(disp_pot),nrow(disp_obs)),]
+  herb_rand<-herb_pot[sample(1:nrow(herb_pot),nrow(herb_obs)),]
+  null_nets[[i]]<-unique(rbind(pol_rand,disp_rand,herb_rand))
+}
+
+
+ext_sim_res<-data.frame()
+net_names<-c('observed','complete','random')
+net_n<-0
+for (net in list(complete_obs_network,complete_pot_network,null_nets)){
+  net_n<-net_n+1
+  net_name<-net_names[net_n]
+  
+  if (net_name!='random'){
+    plant<-unique(net[,1])
+    anim<-unique(net[,2])
+    poll<-unique(net[which(net$interaction=='pollination'),2])
+    disp<-unique(net[which(net$interaction=='dispersal'),2])
+    herb<-unique(net[which(net$interaction=='herbivory'),2])
+    plant_0<-length(plant)
+    anim_0<-length(anim)
+    poll_0<-length(poll)
+    disp_0<-length(disp)
+    herb_0<-length(herb)}
+  for (rep in 1:100){
+    if (net_name=='random'){
+      net_<-net[[rep]]
+      plant<-unique(net_[,1])
+      anim<-unique(net_[,2])
+      poll<-unique(net_[which(net_$interaction=='pollination'),2])
+      disp<-unique(net_[which(net_$interaction=='dispersal'),2])
+      herb<-unique(net_[which(net_$interaction=='herbivory'),2])
+      plant_0<-length(plant)
+      anim_0<-length(anim)
+      poll_0<-length(poll)
+      disp_0<-length(disp)
+      herb_0<-length(herb)
+      } else {net_<-net}
+    ext_seq<-sample(plant,plant_0)
+    ext_count<-0
+    ext_sim_res<-rbind(ext_sim_res,c(net_name,(plant_0-ext_count)/plant_0,
+                                     length(unique(net_[,2]))/anim_0,
+                                     length(unique(intersect(net_[which(net_$interaction=='pollination'),2],poll)))/poll_0,
+                                     length(unique(intersect(net_[which(net_$interaction=='dispersal'),2],disp)))/disp_0,
+                                     length(unique(intersect(net_[which(net_$interaction=='herbivory'),2],herb)))/herb_0))
+    for (ext_plant in ext_seq){
+      ext_count<-ext_count+1
+      net_<-net_[net_[,1]!=ext_plant,]
+      ext_sim_res<-rbind(ext_sim_res,c(net_name,(plant_0-ext_count)/plant_0,
+                                       length(unique(net_[,2]))/anim_0,
+                                       length(unique(intersect(net_[which(net_$interaction=='pollination'),2],poll)))/poll_0,
+                                       length(unique(intersect(net_[which(net_$interaction=='dispersal'),2],disp)))/disp_0,
+                                       length(unique(intersect(net_[which(net_$interaction=='herbivory'),2],herb)))/herb_0))
+      }    
+    }  
+  }
+
+
+colnames(ext_sim_res)<-c('net_type','plant','anim','poll','disp','herb')
+for (i in 2:ncol(ext_sim_res)){
+  ext_sim_res[,i]<-as.numeric(ext_sim_res[,i])
+}
+
+
+ext_sim_res$plant<-1-ext_sim_res$plant
+
+
+mean_coext<-aggregate(cbind(anim,poll,disp,herb)~net_type+(round(plant,2)),FUN='mean',data=ext_sim_res)
+sd_coext<-aggregate(cbind(anim,poll,disp,herb)~net_type+(round(plant,2)),FUN='sd',data=ext_sim_res)
+
+write.csv(mean_coext, "D:/R/Multilayers/Strona/Observed and potential interactions/mean_coext_DM.csv", row.names=FALSE)
+write.csv(sd_coext, "D:/R/Multilayers/Strona/Observed and potential interactions/sd_coext_DM.csv", row.names=FALSE)
+mean_coext<-read.csv("mean_coext_NR.csv")
+sd_coext<-read.csv("sd_coext_NR.csv")
+
+colnames(mean_coext)<-c('network_type','plant','multilayer','herbivory','pollination','seed_dispersal')
+names(mean_coext)
+View(mean_coext)
+names(sd_coext)
+View(sd_coext)
+
+
+color_palette<-c('forestgreen','darkblue','darkorange')
+
+color_palette_alpha<-adjustcolor(color_palette, alpha.f = 0.2)
+
+
+pdf('summary_robustness_DM.pdf',width=8,height=8)
+par(mfrow=c(2,2))
+
+for (interaction_type in c('multilayer','herbivory','pollination','seed_dispersal')){
+
+  plot(mean_coext$plant,mean_coext[,interaction_type],ylim=c(0,1),type='n',
+     xlab='plant extinctions',ylab='remaining animals',main=interaction_type,las=1)
+
+  col_n<-0
+  for (net_kind in c('observed','enhanced','random')){
+    col_n<-col_n+1
+      mean_coext_k<-mean_coext[mean_coext$network_type==net_kind,]
+      sd_coext_k<-sd_coext[sd_coext$network_type==net_kind,]
+      x<-mean_coext_k$plant
+      y<-mean_coext_k[,interaction_type]
+      y_sd<-sd_coext_k[,interaction_type]      
+      y_ll<-y-y_sd
+      y_ul<-y+y_sd
+      polygon(c(rev(x),x),c(rev(y_ll),y_ul),col=color_palette_alpha[col_n],border = NA)
+      lines(x,y,type='l',col=color_palette[col_n],lwd=2)
+  }  
+ } 
+
+dev.off()
