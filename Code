@@ -1,18 +1,17 @@
-pol_obs<-read.csv("Daphne_observed_pollination.csv")
-pol_pot<-read.csv("Daphne_potential_pollination.csv")
+erb_obs<-read.csv("NaRedona_observed_herbivory.csv")
+herb_pot<-read.csv("NaRedona_potential_herbivory.csv")
+herb_obs<-cbind(herb_obs[,c(1,2)],interaction = 'herbivory')
+herb_pot<-cbind(herb_pot,interaction = 'herbivory')
+
+pol_obs<-read.csv("NaRedona_observed_pollination.csv")
+pol_pot<-read.csv("NaRedona_potential_pollination.csv")
 pol_obs<-cbind(pol_obs[,c(1,2)],interaction = 'pollination')
 pol_pot<-cbind(pol_pot,interaction = 'pollination')
 
-disp_obs<-read.csv("Daphne_observed_dispersal.csv")
-disp_pot<-read.csv("Daphne_potential_dispersal.csv")
+disp_obs<-read.csv("NaRedona_observed_dispersal.csv")
+disp_pot<-read.csv("NaRedona_potential_dispersal.csv")
 disp_obs<-cbind(disp_obs[,c(1,2)],interaction = 'dispersal')
 disp_pot<-cbind(disp_pot,interaction = 'dispersal')
-
-
-herb_obs<-read.csv("Daphne_observed_herbivory.csv")
-herb_pot<-read.csv("Daphne_potential_herbivory.csv")
-herb_obs<-cbind(herb_obs[,c(1,2)],interaction = 'herbivory')
-herb_pot<-cbind(herb_pot,interaction = 'herbivory')
 
 
 complete_obs_network<-unique(rbind(pol_obs,disp_obs,herb_obs))
@@ -96,24 +95,23 @@ ext_sim_res$plant<-1-ext_sim_res$plant
 mean_coext<-aggregate(cbind(anim,poll,disp,herb)~net_type+(round(plant,2)),FUN='mean',data=ext_sim_res)
 sd_coext<-aggregate(cbind(anim,poll,disp,herb)~net_type+(round(plant,2)),FUN='sd',data=ext_sim_res)
 
-write.csv(mean_coext, "D:/R/Multilayers/Strona/Observed and potential interactions/mean_coext_DM.csv", row.names=FALSE)
-write.csv(sd_coext, "D:/R/Multilayers/Strona/Observed and potential interactions/sd_coext_DM.csv", row.names=FALSE)
+write.csv(mean_coext, "D:/R/Multilayers/Strona/Observed and potential interactions/mean_coext_NR.csv", row.names=FALSE)
+write.csv(sd_coext, "D:/R/Multilayers/Strona/Observed and potential interactions/sd_coext_NR.csv", row.names=FALSE)
 mean_coext<-read.csv("mean_coext_NR.csv")
 sd_coext<-read.csv("sd_coext_NR.csv")
 
 colnames(mean_coext)<-c('network_type','plant','multilayer','herbivory','pollination','seed_dispersal')
+
 names(mean_coext)
 View(mean_coext)
 names(sd_coext)
 View(sd_coext)
-
-
 color_palette<-c('forestgreen','darkblue','darkorange')
 
 color_palette_alpha<-adjustcolor(color_palette, alpha.f = 0.2)
 
 
-pdf('summary_robustness_DM.pdf',width=8,height=8)
+pdf('summary_robustness_NR.pdf',width=8,height=8)
 par(mfrow=c(2,2))
 
 for (interaction_type in c('multilayer','herbivory','pollination','seed_dispersal')){
