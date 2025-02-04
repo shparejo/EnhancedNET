@@ -1,137 +1,432 @@
-erb_obs<-read.csv("NaRedona_observed_herbivory.csv")
-herb_pot<-read.csv("NaRedona_potential_herbivory.csv")
-herb_obs<-cbind(herb_obs[,c(1,2)],interaction = 'herbivory')
-herb_pot<-cbind(herb_pot,interaction = 'herbivory')
-
-pol_obs<-read.csv("NaRedona_observed_pollination.csv")
-pol_pot<-read.csv("NaRedona_potential_pollination.csv")
-pol_obs<-cbind(pol_obs[,c(1,2)],interaction = 'pollination')
-pol_pot<-cbind(pol_pot,interaction = 'pollination')
-
-disp_obs<-read.csv("NaRedona_observed_dispersal.csv")
-disp_pot<-read.csv("NaRedona_potential_dispersal.csv")
-disp_obs<-cbind(disp_obs[,c(1,2)],interaction = 'dispersal')
-disp_pot<-cbind(disp_pot,interaction = 'dispersal')
+####explore the importance of nodes in each network
+library(igraph)
+library(birankr)
+library(pracma)
 
 
-complete_obs_network<-unique(rbind(pol_obs,disp_obs,herb_obs))
-complete_pot_network<-unique(rbind(pol_pot,disp_pot,herb_pot,complete_obs_network))
+for_boxplots<-c()
+ext_sim_res<-data.frame()
+z_values<-c()
+file_names<-c('Daphne','MontanaClara','NaRedona')
+for (filename in file_names){
+  
+  herb_obs<-read.csv(paste0('./data/',filename,'_observed_herbivory.csv'))
+  herb_pot<-read.csv(paste0('./data/',filename,'_potential_herbivory.csv'))
+  herb_obs<-cbind(herb_obs[,c(1,2)],interaction = 'herbivory')
+  herb_pot<-cbind(herb_pot,interaction = 'herbivory')
+  
+  pol_obs<-read.csv(paste0('./data/',filename,'_observed_pollination.csv'))
+  pol_pot<-read.csv(paste0('./data/',filename,'_potential_pollination.csv'))
+  pol_obs<-cbind(pol_obs[,c(1,2)],interaction = 'pollination')
+  pol_pot<-cbind(pol_pot,interaction = 'pollination')
+  
+  disp_obs<-read.csv(paste0('./data/',filename,'_observed_dispersal.csv'))
+  disp_pot<-read.csv(paste0('./data/',filename,'_potential_dispersal.csv'))
+  disp_obs<-cbind(disp_obs[,c(1,2)],interaction = 'dispersal')
+  disp_pot<-cbind(disp_pot,interaction = 'dispersal')
+  
+  
+  complete_obs_network<-unique(rbind(pol_obs,disp_obs,herb_obs))
+  complete_pot_network<-unique(rbind(pol_pot,disp_pot,herb_pot,complete_obs_network))
+  
+  
+  pol_pot<-complete_pot_network[complete_pot_network$interaction=='pollination',]
+  disp_pot<-complete_pot_network[complete_pot_network$interaction=='dispersal',]
+  herb_pot<-complete_pot_network[complete_pot_network$interaction=='herbivory',]
+  
+  
+  interactions<-c('pollination','dispersal','herbivory','multilayer')
+  
+  for (interaction in interactions){
+    if (interaction!='multilayer'){
+      obs_g<-complete_obs_network[which(complete_obs_network$interaction==interaction),1:2]
+      pot_g<-complete_pot_network[which(complete_pot_network$interaction==interaction),1:2]
+    } else {
+      obs_g<-complete_obs_network[,1:2]
+      pot_g<-complete_pot_network[,1:2]}
+    
+    pot_ig<-graph_from_data_frame(pot_g,directed = T)
+    obs_ig<-graph_from_data_frame(obs_g,directed = T)
+    #V(pot_ig)$type<-FALSE
+    #V(pot_ig)$type[V(pot_ig)$name%in%pot_g[,1]]<-TRUE
+    #V(obs_ig)$type<-FALSE
+    #V(obs_ig)$type[V(obs_ig)$name%in%obs_g[,1]]<-TRUE
+    pot_links<-paste(pot_g[,1],pot_g[,2])
+    obs_links<-paste(obs_g[,1],obs_g[,2])
+    
+    mis_links<-setdiff(pot_links,obs_links)
+    mis_sp<-setdiff(c(pot_g$plant,pot_g$animal),c(obs_g$plant,obs_g$animal))
+    mis_plants<-setdiff(pot_g$plant,obs_g$plant)
+    mis_animals<-setdiff(pot_g$animal,obs_g$animal)
+    
+    n_plants_mis<-length(mis_plants)
+    n_animals_mis<-length(mis_animals)
 
+    frac_mis_links<-length(mis_links)/length(pot_links)
+    frac_mis_sp<-length(mis_sp)/length(V(pot_ig))
+    
+    pr_plants<-pagerank(pot_g,is_bipartite=T,project_mode = 'rows')
+    pr_animals<-pagerank(pot_g,is_bipartite=T,project_mode = 'columns')
+    
+    pr_plants_mis<-pr_plants[which(pr_plants$plant%in%mis_sp),2]
+    pr_plants_non_mis<-pr_plants[which(pr_plants$plant%in%obs_g[,1]),2]
+    pr_plants<-pr_plants[,2]
+    
+    pr_animals_mis<-pr_animals[which(pr_animals$animal%in%mis_sp),2]
+    pr_animals_non_mis<-pr_animals[which(pr_animals$animal%in%obs_g[,2]),2]
+    pr_animals<-pr_animals[,2]
+    
+    deg_plants<-degree(pot_ig,mode='OUT')[which(V(pot_ig)$name%in%pot_g$plant)]
+    deg_plants_mis<-degree(pot_ig,mode='OUT')[which(V(pot_ig)$name%in%intersect(pot_g$plant,mis_sp))]
+    deg_plants_non_mis<-degree(pot_ig,mode='OUT')[which(V(pot_ig)$name%in%setdiff(pot_g$plant,mis_sp))]
+    
+    deg_animals<-degree(pot_ig,mode='IN')[which(V(pot_ig)$name%in%pot_g$animal)]
+    deg_animals_mis<-degree(pot_ig,mode='IN')[which(V(pot_ig)$name%in%intersect(pot_g$animal,mis_sp))]
+    deg_animals_non_mis<-degree(pot_ig,mode='IN')[which(V(pot_ig)$name%in%setdiff(pot_g$animal,mis_sp))]
 
-pol_pot<-complete_pot_network[complete_pot_network$interaction=='pollination',]
-disp_pot<-complete_pot_network[complete_pot_network$interaction=='dispersal',]
-herb_pot<-complete_pot_network[complete_pot_network$interaction=='herbivory',]
+    pr_plants_null<-c()
+    pr_animals_null<-c()
+    deg_plants_null<-c()
+    deg_animals_null<-c()
+    for (null_rep in 1:1000){
+      pr_plants_null<-c(pr_plants_null,mean(sample(pr_plants,n_plants_mis)))
+      deg_plants_null<-c(deg_plants_null,mean(sample(deg_plants,n_plants_mis)))
+      pr_animals_null<-c(pr_animals_null,mean(sample(pr_animals,n_animals_mis)))
+      deg_animals_null<-c(deg_animals_null,mean(sample(deg_animals,n_animals_mis)))
+    }
+    
+    z_pr_plants_mis<-(mean(pr_plants_mis)-mean(pr_plants_null))/sd(pr_plants_null)
+    z_deg_plants_mis<-(mean(deg_plants_mis)-mean(deg_plants_null))/sd(deg_plants_null)
+    z_pr_animals_mis<-(mean(pr_animals_mis)-mean(pr_animals_null))/sd(pr_animals_null)
+    z_deg_animals_mis<-(mean(deg_animals_mis)-mean(deg_animals_null))/sd(deg_animals_null)
+    
+    z_values<-rbind(z_values, c(filename,interaction,z_pr_plants_mis,z_deg_plants_mis,z_pr_animals_mis,z_deg_plants_mis))
+    for_boxplots<-rbind(for_boxplots,
+                        cbind(filename,interaction,'pagerank','plant','complete',pr_plants),
+                        cbind(filename,interaction,'pagerank','plant','missed',pr_plants_mis),
+                        cbind(filename,interaction,'pagerank','plant','observed',pr_plants_non_mis),
+                        
+                        cbind(filename,interaction,'pagerank','animal','complete',pr_animals),
+                        cbind(filename,interaction,'pagerank','animal','missed',pr_animals_mis),
+                        cbind(filename,interaction,'pagerank','animal','observed',pr_animals_non_mis),
+                        
+                        cbind(filename,interaction,'degree','plant','complete',deg_plants),
+                        cbind(filename,interaction,'degree','plant','missed',deg_plants_mis),
+                        cbind(filename,interaction,'degree','plant','observed',deg_plants_non_mis),
+                        
+                        cbind(filename,interaction,'degree','animal','complete',deg_animals),
+                        cbind(filename,interaction,'degree','animal','missed',deg_animals_mis),
+                        cbind(filename,interaction,'degree','animal','observed',deg_animals_non_mis),
+                        
+                        cbind(filename,interaction,'degree','plant','null',deg_plants_null),
+                        cbind(filename,interaction,'degree','animal','null',deg_animals_null),
+                        cbind(filename,interaction,'pagerank','plant','null',pr_plants_null),
+                        cbind(filename,interaction,'pagerank','animal','null',pr_animals_null)
+                        
+                    )
 
-null_nets<-list()
-for (i in 1:100){
-  pol_rand<-pol_pot[sample(1:nrow(pol_pot),nrow(pol_obs)),]
-  disp_rand<-disp_pot[sample(1:nrow(disp_pot),nrow(disp_obs)),]
-  herb_rand<-herb_pot[sample(1:nrow(herb_pot),nrow(herb_obs)),]
-  null_nets[[i]]<-unique(rbind(pol_rand,disp_rand,herb_rand))
+    net_names<-c('observed','complete','random')
+    for (rep in 1:100){
+      null_net<-pot_g[sample(1:nrow(pot_g),nrow(obs_g)),]
+      net_n<-0
+      for (net in list(obs_g,pot_g,null_net)){
+        net_n<-net_n+1
+        net_name<-net_names[net_n]
+        plant<-unique(net[,1])
+        anim<-unique(net[,2])
+        plant_0<-length(plant)
+        anim_0<-length(anim)
+        net_<-net
+        ext_seq<-sample(plant,plant_0)
+        ext_count<-0
+        ext_sim_res<-rbind(ext_sim_res,c(filename, interaction,net_name,(plant_0-ext_count)/plant_0,
+                                         length(unique(net_[,2]))/anim_0))
+        for (ext_plant in ext_seq){
+          if (ext_plant %in% plant){
+            ext_count<-ext_count+1
+            net_<-net_[net_[,1]!=ext_plant,]
+            ext_sim_res<-rbind(ext_sim_res,c(filename, interaction,net_name,(plant_0-ext_count)/plant_0,
+                                             length(unique(net_[,2]))/anim_0))
+          }    
+        }  
+      }
+    }
+  } 
 }
 
 
-ext_sim_res<-data.frame()
-net_names<-c('observed','complete','random')
-net_n<-0
-for (net in list(complete_obs_network,complete_pot_network,null_nets)){
-  net_n<-net_n+1
-  net_name<-net_names[net_n]
-  
-  if (net_name!='random'){
-    plant<-unique(net[,1])
-    anim<-unique(net[,2])
-    poll<-unique(net[which(net$interaction=='pollination'),2])
-    disp<-unique(net[which(net$interaction=='dispersal'),2])
-    herb<-unique(net[which(net$interaction=='herbivory'),2])
-    plant_0<-length(plant)
-    anim_0<-length(anim)
-    poll_0<-length(poll)
-    disp_0<-length(disp)
-    herb_0<-length(herb)}
-  for (rep in 1:100){
-    if (net_name=='random'){
-      net_<-net[[rep]]
-      plant<-unique(net_[,1])
-      anim<-unique(net_[,2])
-      poll<-unique(net_[which(net_$interaction=='pollination'),2])
-      disp<-unique(net_[which(net_$interaction=='dispersal'),2])
-      herb<-unique(net_[which(net_$interaction=='herbivory'),2])
-      plant_0<-length(plant)
-      anim_0<-length(anim)
-      poll_0<-length(poll)
-      disp_0<-length(disp)
-      herb_0<-length(herb)
-      } else {net_<-net}
-    ext_seq<-sample(plant,plant_0)
-    ext_count<-0
-    ext_sim_res<-rbind(ext_sim_res,c(net_name,(plant_0-ext_count)/plant_0,
-                                     length(unique(net_[,2]))/anim_0,
-                                     length(unique(intersect(net_[which(net_$interaction=='pollination'),2],poll)))/poll_0,
-                                     length(unique(intersect(net_[which(net_$interaction=='dispersal'),2],disp)))/disp_0,
-                                     length(unique(intersect(net_[which(net_$interaction=='herbivory'),2],herb)))/herb_0))
-    for (ext_plant in ext_seq){
-      ext_count<-ext_count+1
-      net_<-net_[net_[,1]!=ext_plant,]
-      ext_sim_res<-rbind(ext_sim_res,c(net_name,(plant_0-ext_count)/plant_0,
-                                       length(unique(net_[,2]))/anim_0,
-                                       length(unique(intersect(net_[which(net_$interaction=='pollination'),2],poll)))/poll_0,
-                                       length(unique(intersect(net_[which(net_$interaction=='dispersal'),2],disp)))/disp_0,
-                                       length(unique(intersect(net_[which(net_$interaction=='herbivory'),2],herb)))/herb_0))
-      }    
-    }  
-  }
+colnames(z_values)<-c('filename','interaction','z_pr_plants_mis','z_deg_plants_mis','z_pr_animals_mis','z_deg_plants_mis')
+write.table(z_values,'z_values.csv',row.names=F,col.names=T,sep=',',quote=F)
 
-
-colnames(ext_sim_res)<-c('net_type','plant','anim','poll','disp','herb')
-for (i in 2:ncol(ext_sim_res)){
+colnames(ext_sim_res)<-c('site','interaction','net_type','plant','anim')
+for (i in 4:ncol(ext_sim_res)){
   ext_sim_res[,i]<-as.numeric(ext_sim_res[,i])
 }
 
 
 ext_sim_res$plant<-1-ext_sim_res$plant
+mean_coext_all<-aggregate(anim~site+interaction+net_type+(round(plant,1)),FUN='mean',data=ext_sim_res)
+sd_coext_all<-aggregate(anim~site+interaction+net_type+(round(plant,1)),FUN='sd',data=ext_sim_res)
 
+colnames(mean_coext_all)<-c('site','interaction','network_type','plant','animal')
+colnames(sd_coext_all)<-c('site','interaction','network_type','plant','animal')
 
-mean_coext<-aggregate(cbind(anim,poll,disp,herb)~net_type+(round(plant,2)),FUN='mean',data=ext_sim_res)
-sd_coext<-aggregate(cbind(anim,poll,disp,herb)~net_type+(round(plant,2)),FUN='sd',data=ext_sim_res)
-
-write.csv(mean_coext, "D:/R/Multilayers/Strona/Observed and potential interactions/mean_coext_NR.csv", row.names=FALSE)
-write.csv(sd_coext, "D:/R/Multilayers/Strona/Observed and potential interactions/sd_coext_NR.csv", row.names=FALSE)
-mean_coext<-read.csv("mean_coext_NR.csv")
-sd_coext<-read.csv("sd_coext_NR.csv")
-
-colnames(mean_coext)<-c('network_type','plant','multilayer','herbivory','pollination','seed_dispersal')
-
-names(mean_coext)
-View(mean_coext)
-names(sd_coext)
-View(sd_coext)
 color_palette<-c('forestgreen','darkblue','darkorange')
-
 color_palette_alpha<-adjustcolor(color_palette, alpha.f = 0.2)
 
+pdf('robustness.pdf',height=12,width=16)
+par(mfrow=c(3,4))
+aucs_data<-data.frame()
+for (site in unique(mean_coext_all$site)){
+  mean_coext_site<-mean_coext_all[mean_coext_all$site==site,]
+  sd_coext_site<-sd_coext_all[sd_coext_all$site==site,]
+  for (interaction in interactions){
+      mean_coext<-mean_coext_site[mean_coext_site$interaction==interaction,]
+      sd_coext<-sd_coext_site[sd_coext_site$interaction==interaction,]
+      plot(mean_coext$plant,mean_coext$animal,ylim=c(0,1),type='n',
+       xlab='plant extinctions',ylab='remaining animals',main=paste(site,interaction),las=1)
+      col_n<-0
+      aucs<-c()
+      for (net_kind in c('observed','complete','random')){
+        col_n<-col_n+1
+        mean_coext_k<-mean_coext[mean_coext$network_type==net_kind,]
+        sd_coext_k<-sd_coext[sd_coext$network_type==net_kind,]
+        x<-mean_coext_k$plant
+        y<-mean_coext_k$animal
+        aucs<-c(aucs,trapz(x,y))
+        y_sd<-sd_coext_k$animal      
+        y_ll<-y-y_sd
+        y_ul<-y+y_sd
+        polygon(c(rev(x),x),c(rev(y_ll),y_ul),col=color_palette_alpha[col_n],border = NA)
+        lines(x,y,type='l',col=color_palette[col_n],lwd=2)
+      }
+      aucs_data<-rbind(aucs_data,c(site,interaction,aucs))
+    }
+  }
+dev.off()
 
-pdf('summary_robustness_NR.pdf',width=8,height=8)
+
+
+
+colnames(aucs_data)<-c('site','interaction','observed','complete','random')
+
+for_boxplots<-data.frame(for_boxplots)
+colnames(for_boxplots)<-c('site','interaction','metric','node_type','info','value')
+for_boxplots$value<-as.numeric(for_boxplots$value)
+
+library(viridis)
+pdf('boxplots.pdf',width=12,height=8)
+par(mfrow=c(4,4))
+for (interaction in interactions){
+  bp_data_int<-for_boxplots[for_boxplots$interaction==interaction,]
+  for (metric in c('pagerank','degree')){
+    bp_data_metric<-bp_data_int[bp_data_int$metric==metric,]
+    for (node_type in c('plant','animal')){
+      bp_data<-bp_data_metric[bp_data_metric$node_type==node_type,]
+      group_size<-4
+      group_n<-3
+      g_width<-group_size*0.2
+      disp<-seq(0,g_width,length.out=group_size)
+      space<-0
+      at <- c()
+      at_lab<-c()
+      for (group in seq(0,group_n-1)){
+        tick_pos<-group+disp+space
+        at<-c(at,tick_pos)
+        at_lab<-c(at_lab,mean(tick_pos))
+        space<-space+0.5}
+      bp<-boxplot(bp_data$value~bp_data$info+bp_data$site,
+              at=at,
+              xaxt='n',
+              main=paste(interaction,node_type),
+              xlab='',ylab=metric,
+              outline=F,las=2,boxwex=g_width/group_size,col=viridis(4))
+      axis(1, at = at_lab,
+           labels = unique(bp_data$site),cex.axis=0.8)
+      
+      
+      }
+    }
+}
+
+
+par(mfrow=c(1,1))
+plot(0,0,type='n',xaxt='n',yaxt='n',xlab='',ylab='')
+legend(-1,1,levels(as.factor(bp_data$info)),col=viridis(4),pch=15,pt.cex=6,cex=6)
+
+dev.off()
+
+#######################
+pdf('boxplots_only_null.pdf',width=12,height=8)
+par(mfrow=c(4,4))
+for (interaction in interactions){
+  bp_data_int<-for_boxplots[for_boxplots$interaction==interaction,]
+  bp_data_int<-bp_data_int[bp_data_int$info%in%c('missed','null'),]
+  for (metric in c('pagerank','degree')){
+    bp_data_metric<-bp_data_int[bp_data_int$metric==metric,]
+    for (node_type in c('plant','animal')){
+      bp_data<-bp_data_metric[bp_data_metric$node_type==node_type,]
+      group_size<-2
+      group_n<-3
+      g_width<-group_size*0.2
+      disp<-seq(0,g_width,length.out=group_size)
+      space<-0
+      at <- c()
+      at_lab<-c()
+      for (group in seq(0,group_n-1)){
+        tick_pos<-group+disp+space
+        at<-c(at,tick_pos)
+        at_lab<-c(at_lab,mean(tick_pos))
+        space<-space+0.5}
+      bp<-boxplot(bp_data$value~bp_data$info+bp_data$site,
+                  at=at,
+                  xaxt='n',
+                  main=paste(interaction,node_type),
+                  xlab='',ylab=metric,
+                  outline=F,las=2,boxwex=g_width/group_size,col=viridis(group_size))
+      axis(1, at = at_lab,
+           labels = unique(bp_data$site),cex.axis=0.8)
+      
+      
+    }
+  }
+}
+
+
+par(mfrow=c(1,1))
+plot(0,0,type='n',xaxt='n',yaxt='n',xlab='',ylab='')
+legend(-1,1,levels(as.factor(bp_data$info)),col=viridis(group_size),pch=15,pt.cex=6,cex=6)
+
+dev.off()
+
+
+########################
+
+delta_info<-c()
+for (i in 1:nrow(aucs_data)){
+  site<-aucs_data[i,]$site
+  site_data<-for_boxplots[for_boxplots$site==site,]
+  interaction<-aucs_data[i,]$interaction
+  int_data<-site_data[site_data$interaction==interaction,]
+  for (metric in c('pagerank','degree')){
+      met_data<-int_data[int_data$metric==metric,]
+      for (node_type in c('plant','animal')){
+        t_data<-met_data[met_data$node_type==node_type,] 
+        comp_dat<-t_data[t_data$info=='complete',]$value
+        mis_dat<-t_data[t_data$info=='missed',]$value
+        obs_dat<-t_data[t_data$info=='observed',]$value
+        delta<-log(mean(mis_dat)/mean(comp_dat))
+        delta_info<-rbind(delta_info,c(site,interaction,metric,node_type,delta,aucs_data[i,3:5]))
+      }
+    }
+  }
+
+delta_info<-data.frame(delta_info)
+colnames(delta_info)<-c('site','interaction','metric','node_type','delta','observed','complete','random')
+
+for (i in 5:ncol(delta_info)){
+  delta_info[,i]<-as.numeric(delta_info[,i])
+}
+
+pdf('deltAUC_vs_node_prop_diff.pdf',width=8,height=8)
 par(mfrow=c(2,2))
+for (metric in c('pagerank','degree')){
+  delta_metric<-delta_info[delta_info$metric==metric,]
+  for (taxon in c('plant','animal')){
+    delta_taxon<-delta_metric[delta_metric$node_type==taxon,]   
+    
+    auc_diff<-delta_taxon$observed-delta_taxon$complete
+    r2<-cor(delta_taxon$delta,auc_diff)**2
+    reg_line<-lm(auc_diff~delta_taxon$delta)
+    plot(delta_taxon$delta,auc_diff,main=paste(taxon,metric,'r2=',round(r2,1)),
+         xlab='log% diff in node properties',ylab='Delta AUC/robustness')  
+    abline(reg_line)
+      }
+}
+dev.off()
 
-for (interaction_type in c('multilayer','herbivory','pollination','seed_dispersal')){
 
-  plot(mean_coext$plant,mean_coext[,interaction_type],ylim=c(0,1),type='n',
-     xlab='plant extinctions',ylab='remaining animals',main=interaction_type,las=1)
 
-  col_n<-0
-  for (net_kind in c('observed','enhanced','random')){
-    col_n<-col_n+1
-      mean_coext_k<-mean_coext[mean_coext$network_type==net_kind,]
-      sd_coext_k<-sd_coext[sd_coext$network_type==net_kind,]
-      x<-mean_coext_k$plant
-      y<-mean_coext_k[,interaction_type]
-      y_sd<-sd_coext_k[,interaction_type]      
-      y_ll<-y-y_sd
-      y_ul<-y+y_sd
-      polygon(c(rev(x),x),c(rev(y_ll),y_ul),col=color_palette_alpha[col_n],border = NA)
-      lines(x,y,type='l',col=color_palette[col_n],lwd=2)
-  }  
- } 
+pdf('deltAUC_vs_node_prop_diff_NM.pdf',width=8,height=8)
+par(mfrow=c(2,2))
+for (metric in c('pagerank','degree')){
+  delta_metric<-delta_info[delta_info$metric==metric,]
+  for (taxon in c('plant','animal')){
+    delta_taxon<-delta_metric[delta_metric$node_type==taxon,]   
+    
+    auc_diff<-delta_taxon$observed-delta_taxon$random
+    r2<-cor(delta_taxon$delta,auc_diff)**2
+    reg_line<-lm(auc_diff~delta_taxon$delta)
+    plot(delta_taxon$delta,auc_diff,main=paste(taxon,metric,'r2=',round(r2,1)),
+         xlab='log% diff in node properties',ylab='Delta AUC/robustness')  
+    abline(reg_line)
+  }
+}
+dev.off()
 
+
+################################
+###Z values
+
+delta_info<-c()
+for (i in 1:nrow(aucs_data)){
+  site<-aucs_data[i,]$site
+  site_data<-for_boxplots[for_boxplots$site==site,]
+  interaction<-aucs_data[i,]$interaction
+  int_data<-site_data[site_data$interaction==interaction,]
+  for (metric in c('pagerank','degree')){
+    met_data<-int_data[int_data$metric==metric,]
+    for (node_type in c('plant','animal')){
+      t_data<-met_data[met_data$node_type==node_type,] 
+      comp_dat<-t_data[t_data$info=='complete',]$value
+      mis_dat<-t_data[t_data$info=='missed',]$value
+      obs_dat<-t_data[t_data$info=='observed',]$value
+      null_dat<-t_data[t_data$info=='null',]$value
+      delta<-(mean(mis_dat)-mean(null_dat))/sd(null_dat)
+      delta_info<-rbind(delta_info,c(site,interaction,metric,node_type,delta,aucs_data[i,3:5]))
+    }
+  }
+}
+
+delta_info<-data.frame(delta_info)
+colnames(delta_info)<-c('site','interaction','metric','node_type','delta','observed','complete','random')
+
+for (i in 5:ncol(delta_info)){
+  delta_info[,i]<-as.numeric(delta_info[,i])
+}
+
+pdf('Z_vs_node_prop_diff.pdf',width=8,height=8)
+par(mfrow=c(2,2))
+for (metric in c('pagerank','degree')){
+  delta_metric<-delta_info[delta_info$metric==metric,]
+  for (taxon in c('plant','animal')){
+    delta_taxon<-delta_metric[delta_metric$node_type==taxon,]   
+    
+    auc_diff<-delta_taxon$observed-delta_taxon$complete
+    r2<-cor(delta_taxon$delta,auc_diff)**2
+    reg_line<-lm(auc_diff~delta_taxon$delta)
+    plot(delta_taxon$delta,auc_diff,main=paste(taxon,metric,'r2=',round(r2,1)),
+         xlab='Z missing data',ylab='Delta AUC/robustness')  
+    abline(reg_line)
+  }
+}
+dev.off()
+
+
+
+pdf('Z_vs_node_prop_diff_NM.pdf',width=8,height=8)
+par(mfrow=c(2,2))
+for (metric in c('pagerank','degree')){
+  delta_metric<-delta_info[delta_info$metric==metric,]
+  for (taxon in c('plant','animal')){
+    delta_taxon<-delta_metric[delta_metric$node_type==taxon,]   
+    
+    auc_diff<-delta_taxon$observed-delta_taxon$random
+    r2<-cor(delta_taxon$delta,auc_diff)**2
+    reg_line<-lm(auc_diff~delta_taxon$delta)
+    plot(delta_taxon$delta,auc_diff,main=paste(taxon,metric,'r2=',round(r2,1)),
+         xlab='Z missing data',ylab='Delta AUC/robustness')  
+    abline(reg_line)
+  }
+}
 dev.off()
